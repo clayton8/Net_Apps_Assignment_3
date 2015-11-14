@@ -1,3 +1,6 @@
+# Contains GMAIL account passoword and the email you want to text
+import personal_data
+
 import requests
 import json
 import argparse
@@ -32,10 +35,11 @@ def location(zipcode):
     info = g.geojson
     data = g.latlng
     return data
-    #print data
 
 def notification(message):
-
+    smtpUser = personal_data.get_username()
+    toAddr = personal_data.get_phone_number()
+    smtpPass = personal_data.get_password() 
     fromAddr = smtpUser
 
     subject = 'Data'
@@ -106,7 +110,7 @@ observer_location = location(args.zipcode)
 
 # Sending a text message
 d =  "Latitude and Longitude from zipcode " + args.zipcode + " = " + str(observer_location)
-print 'trying to send: \n    "' + d + '"' + '\n'
+print 'trying to send: \n    "' + d + '"'
 notification(d)
 print 'sent message\n\n'
 
