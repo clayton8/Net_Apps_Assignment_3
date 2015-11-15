@@ -1,14 +1,18 @@
-# Contains GMAIL account passoword and the email you want to text
-# it is in the git ignore so we will not accidently add it.
+# Contains GMAIL account passoword, the email you want to text
+# and space-tracks.org login info. It is in the git ignore so we 
+# will not accidently add it.
 import personal_data
 
 # Used for simulation
 import time
+
+# Used for satellite prediction times
 import datetime
+
+# Used to translate between rad and degrees
 import math
 
-import requests
-import json
+# Used for parsing arguments
 import argparse
 
 # Used for getting lat and long from zip code
@@ -29,6 +33,8 @@ import time
 # Used for tracking satellite
 import ephem
 
+# Attempt to import libraries to use the Raspberry Pi's
+# GPIO pin and the headphone jack.
 PLAY_SOUND = True
 USE_GPIO = True
 try:
@@ -43,12 +49,33 @@ except ImportError:
     print "WARNING COULD NOT IMPORT 'RPi.GPIO' so not using GPIO"
     USE_GPIO = False
 
+# Default to true until we read in the args later
 SEND_TEXT_MESSGE = True
 LED = 15
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ######################################################
 ##################### FUNCTIONS ######################
 def GPIO_setup():
+    """
+        Attemps to setup GPIO pins if the library
+        was installed correctly.
+    """
     if(USE_GPIO):
         GPIO.setmode(GPIO.BOARD)
         GPIO.setup(int(LED), GPIO.OUT)
@@ -56,6 +83,10 @@ def GPIO_setup():
     
 
 def location(zipcode):
+    """
+        Generates a latitude and longitude depending
+        on a US zipcode.
+    """
     g = geocoder.google(zipcode)
     info = g.geojson
     data = g.latlng
@@ -63,6 +94,13 @@ def location(zipcode):
     return return_data
 
 def send_text(message):
+    """
+        Sends a text message with a particular message to a 
+        user. It utilizes texting though emails. So to do this 
+        all you have to do is add your own Gmail accound info
+        and an email address you want to send to.
+    """
+
     # Setup sending information
     smtpUser = personal_data.get_username()
     toAddr = personal_data.get_phone_number()
@@ -91,12 +129,19 @@ def send_text(message):
     s.quit()
     
 def make_sound(sound_file):
+    """
+        Plays audio file through headphone jack
+        in Raspberry Pi.
+    """
     pygame.mixer.init()
     pygame.mixer.music.load(sound_file)
     pygame.mixer.music.play()
     
     
 def blink_LED():
+    """
+        Blins an LED for 1 second on a Raspberry Pi
+    """
     GPIO.output(int(LED), GPIO.HIGH)
     time.sleep(1)
     GPIO.output(int(LED), GPIO.LOW)
@@ -104,6 +149,12 @@ def blink_LED():
 
 
 def notification(message):
+    """
+        Sends all three notifications depending on global
+        variables. Text messaging is enabled with '-t' 
+        where as the other two check to see if the libraries 
+        are availible.
+    """
     if SEND_TEXT_MESSGE:
         send_text(message)
     if PLAY_SOUND: 
@@ -118,9 +169,7 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description="Know viewable satellites given a zip code.")
     parser.add_argument("-s", "--satellite", required=True, help='Pass in satellite NORAD id number', type=str)
-
     parser.add_argument("-z", "--zipcode", required=True, help='Pass in zipcode for the observer', type=str)
-    
     parser.add_argument("-t", "--text", action='store_false', help='Flag whether or not you want to send a text message')
     parser.add_argument("--sim", action='store_false', help='Flag whether or not you want to run the simmulation')
     args = parser.parse_args()
@@ -153,6 +202,9 @@ def satellite_query(satellite_NORAD_id):
     return sat_data.read()
 
 def datetime_from_time(tr):
+    """
+        Translates ephem.Date into datetime object
+    """
     year, month, day, hour, minute, second = tr.tuple()
     dt = datetime.datetime(year, month, day, hour, minute, int(second))
     return dt
@@ -169,12 +221,24 @@ def weather_is_clear(time):
     return True
 
 def satellite_visible(sat, sun, time):
+    """
+        Checks for 3 things to see if the satellite is visible:
+            1. Satellite is not ecliped by the Eath
+            2. The sun is at the right angle so the satellite can
+               reflect the light to the observer
+            3. The weather is not cloudy.
+    """
     if sat.eclipsed is False and math.degrees(sun.alt) < -6  and math.degrees(sun.alt) > -16 and weather_is_clear(time):
         return True
     else:
         return False
 
 def convert_azimuth(azimuth):
+    """
+        Azimuth is esentuallly the degrees on a compass.
+        This funciton converts radians into N, S, E, and W
+        values
+    """
     deg_azi = math.degrees(azimuth)
 
     if deg_azi < 11.25 or deg_azi >= 348.75:
@@ -212,6 +276,14 @@ def convert_azimuth(azimuth):
      
 
 def satellite_finder(obs, sat):
+    """
+        Function which takes an observer and
+        a satellite and finds 5 instances in which
+        the observer will be able to see the satellite.
+        It returns a list of dictionaries, which hold information
+        about the satellite sighting.
+    """
+    
     sun = ephem.Sun()
     sun.compute(obs)
     sat.compute(obs)
@@ -271,12 +343,17 @@ def make_satellite_message_phone(obj):
     message = "Viewing in 15 minutes!\n\n" 
     message = message + "You can see the satellite at: " + str(obj['start']) + " (UTC)\n"
     message = message + "Duration: " + str(duration) + "\n"
-    message = message + "Starting from: " + str(math.degrees(view['azi_start'])) + " (" + convert_azimuth(view['azi_start']) + ")\n"
-    message = message + "Going to: " + str(math.degrees(view['azi_end'])) + " (" + convert_azimuth(view['azi_end']) + ")\n"
-    message = message + "Maximum altitude of: " + str(math.degrees(view['max_alt'])) + "\n"
+    message = message + "Starting from: " + str(math.degrees(obj['azi_start'])) + " (" + convert_azimuth(obj['azi_start']) + ")\n"
+    message = message + "Going to: " + str(math.degrees(obj['azi_end'])) + " (" + convert_azimuth(obj['azi_end']) + ")\n"
+    message = message + "Maximum altitude of: " + str(math.degrees(obj['max_alt'])) + "\n"
     return message
 
 def time_simulation(satellite_viewing_list):
+    """
+        Takes in the object from 'satellite_finder; and will simulate 
+        from 15 minutes and 10 seconds out, down to the 15 minute
+        alert which should set off all alerts, sound, light, and text.
+    """
     for view in satellite_viewing_list:
         print "SIMULATING EVENT"
         print
@@ -293,11 +370,20 @@ def time_simulation(satellite_viewing_list):
         print "Sending out this text message: \n\n" + text_message + "\n\n"
 
         notification(text_message)
-        
-
 
 ##################### FUNCTIONS ######################
 ######################################################
+
+
+
+
+
+
+
+
+
+
+
 
 # Setup GPIO pins if the library exits
 GPIO_setup()
