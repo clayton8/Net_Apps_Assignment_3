@@ -1,6 +1,8 @@
 # Contains GMAIL account passoword and the email you want to text
 import personal_data
 
+
+
 import requests
 import json
 
@@ -10,6 +12,8 @@ import json
 import personal_data
 
 # Used for simulation
+import sys
+import select
 import time
 
 # Used for satellite prediction times
@@ -36,8 +40,8 @@ import urllib2
 import smtplib
 import time
 
-LED = 15
-
+from threading import Thread
+from threading import Lock
 # Used for tracking satellite
 import ephem
 
@@ -58,10 +62,17 @@ except ImportError:
     USE_GPIO = False
 
 # Default to true until we read in the args later
+PRINT_LOCK = Lock()
 SEND_TEXT_MESSGE = True
 LED = 15
-
-
+global STOP_LED
+LED_LOCK = Lock()
+STOP_LED = 0
+global STOP_SOUND
+SOUND_LOCK = Lock()
+STOP_SOUND = 0
+global t1
+global t2
 
 
 
@@ -158,40 +169,61 @@ def parse_args():
         message = message[145:]
     s.quit()
     
-def make_sound(sound_file):
+def make_sound(sound_file, curr_time, stop_time):
     """
         Plays audio file through headphone jack
         in Raspberry Pi.
     """
     pygame.mixer.init()
     pygame.mixer.music.load(sound_file)
-    pygame.mixer.music.play()
-    
-    
-def blink_LED():
+    pygame.mixer.music.play(-1)
+ 
+    """ 
+    while curr_time < stop_time:
+        time.sleep(1)
+        with SOUND_LOCK:
+            if STOP_SOUND == 1:
+                break
+        curr_time = curr_time + datetime.timedelta(seconds=0)
+    pygame.mixer.music.stop()
+    pygame.mixer.music.rewind()
+    """
+
+def blink_LED(curr_time, stop_time):
     """
         Blins an LED for 1 second on a Raspberry Pi
     """
-    GPIO.output(int(LED), GPIO.HIGH)
-    time.sleep(1)
+    while curr_time < stop_time:
+        GPIO.output(int(LED), GPIO.HIGH)
+        time.sleep(.25)
+        GPIO.output(int(LED), GPIO.LOW)
+        with LED_LOCK:
+            if STOP_LED:
+                break
+        time.sleep(.25)
+        curr_time = curr_time + datetime.timedelta(seconds=1)
     GPIO.output(int(LED), GPIO.LOW)
-    
 
 
-def notification(message):
+def notification(message, curr_time, stop_time):
     """
         Sends all three notifications depending on global
         variables. Text messaging is enabled with '-t' 
         where as the other two check to see if the libraries 
         are availible.
     """
+    global t1
+    global t2
+    if USE_GPIO:
+        global t1
+        t1 = Thread(target=blink_LED, args=(curr_time, stop_time))
+        t1.start()
+    if PLAY_SOUND:
+        global t2
+        t2 = Thread(target=make_sound, args=("police_s.wav", curr_time, stop_time))
+        t2.start()
     if SEND_TEXT_MESSGE:
         send_text(message)
-    if PLAY_SOUND: 
-        make_sound("police_s.wav")
-    if USE_GPIO:
-        blink_LED()
-
 
 def parse_args():
     """
@@ -405,10 +437,19 @@ def time_simulation(satellite_viewing_list):
         from 15 minutes and 10 seconds out, down to the 15 minute
         alert which should set off all alerts, sound, light, and text.
     """
+    global STOP_LED
+    global STOP_SOUND
+    global t1
+    global t2
     for view in satellite_viewing_list:
         print "SIMULATING EVENT"
         print
         curr_time = view['start'] - datetime.timedelta(minutes=15, seconds=10)
+        
+        with LED_LOCK:
+            STOP_LED = 0
+        with SOUND_LOCK:
+            STOP_SOUND = 0
         
         while (view['start'] - curr_time) > datetime.timedelta(minutes=15):
             print "Curent time: " + str(curr_time)
@@ -416,11 +457,22 @@ def time_simulation(satellite_viewing_list):
             curr_time = curr_time + datetime.timedelta(seconds=1)
         
         print "\nIT IS NOW 15 MINUTES BEFORE A VIEWING!!!\n"
-        
+        end_time = curr_time + datetime.timedelta(minutes=10)
         text_message = make_satellite_message_phone(view)
         print "Sending out this text message: \n\n" + text_message + "\n\n"
 
-        notification(text_message)
+        notification(text_message, curr_time, end_time)
+        print "You may wait 10 minutes for time LED and sound to stop, or you can press 'enter' to continue"
+        select.select([sys.stdin], [], [], 600)
+        sys.stdin.readline()
+        with LED_LOCK:
+            STOP_LED = 1
+        with SOUND_LOCK:
+            STOP_SOUND = 1
+        t1.join()
+        t2.join()
+
+
 
 ##################### FUNCTIONS ######################
 ######################################################
