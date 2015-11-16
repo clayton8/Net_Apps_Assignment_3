@@ -35,13 +35,8 @@ import urllib2
 # Used for text messaging
 import smtplib
 import time
-import RPi.GPIO as GPIO
-import pygame
 
 LED = 15
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(int(LED), GPIO.OUT)
-GPIO.output(int(LED),GPIO.LOW)
 
 # Used for tracking satellite
 import ephem
@@ -471,7 +466,7 @@ LONG = str(observer_location['longitude'])
 
 to_get_weather = 'http://api.openweathermap.org/data/2.5/forecast/daily?lat=' + LAT + '&lon=' + LONG + '&cnt=16&mode=json&&appid=' + API_KEY
 f = urllib2.urlopen(to_get_weather)
-print 'url: ', to_get_weather
+
 forecast = f.read()
 f_json = json.loads(forecast)
 list_of_data = f_json['list']
@@ -486,7 +481,7 @@ for j in range(0,15):
     data = r['main']
     weather.append(data)
     
-print 'weather list: ', weather
+print 'weather list: \n\n', weather
 print
 print "================================================================"
 
